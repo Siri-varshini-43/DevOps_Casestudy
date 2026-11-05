@@ -1,0 +1,39 @@
+
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: newspulse-deployment
+
+spec:
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: newspulse
+
+  template:
+    metadata:
+      labels:
+        app: newspulse
+
+    spec:
+      containers:
+        - name: newspulse
+          image: sirivarshini43/newspulse:latest
+
+          ports:
+            - containerPort: 5000
+
+          env:
+            - name: GNEWS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: newspulse-secrets
+                  key: GNEWS_API_KEY
+
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: newspulse-secrets
+                  key: GEMINI_API_KEY
