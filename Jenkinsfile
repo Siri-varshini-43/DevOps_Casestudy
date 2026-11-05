@@ -4,7 +4,9 @@ pipeline {
 
     environment {
         DOCKERHUB_USER = 'sirivarshini43'
+        DOCKERHUB_PASS = 'Siri@2006'
         IMAGE_NAME = 'newspulse'
+        KUBECONFIG = 'C:\\Users\\siriv\\.kube\\config'
     }
 
     stages {
@@ -17,51 +19,56 @@ pipeline {
 
         stage('Code Validation') {
             steps {
+                echo 'Validating Python Code...'
                 bat 'python -m py_compile app.py'
             }
         }
 
         stage('Docker Build') {
             steps {
-                bat 'docker build -t %DOCKERHUB_USER%/%IMAGE_NAME%:latest .'
-                bat 'docker tag %DOCKERHUB_USER%/%IMAGE_NAME%:latest %DOCKERHUB_USER%/%IMAGE_NAME%:%BUILD_NUMBER%'
+                echo 'Building Docker Image...'
+
+                bat '''
+                docker build -t %DOCKERHUB_USER%/%IMAGE_NAME%:latest .
+                docker tag %DOCKERHUB_USER%/%IMAGE_NAME%:latest %DOCKERHUB_USER%/%IMAGE_NAME%:%BUILD_NUMBER%
+                '''
+            }
+        }
+
+        stage('Docker Login') {
+            steps {
+                echo 'Logging into Docker Hub...'
+
+                bat '''
+                docker login -u %DOCKERHUB_USER% -p "%DOCKERHUB_PASS%"
+                '''
             }
         }
 
         stage('Docker Push') {
             steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'dockerhub-creds',
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS'
-                    )
-                ]) {
-                    bat '''
-                    echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin
-                    docker push %DOCKERHUB_USER%/%IMAGE_NAME%:latest
-                    docker push %DOCKERHUB_USER%/%IMAGE_NAME%:%BUILD_NUMBER%
-                    docker logout
-                    '''
-                }
+                echo 'Pushing Docker Image to Docker Hub...'
+
+                bat '''
+                docker push %DOCKERHUB_USER%/%IMAGE_NAME%:latest
+                docker push %DOCKERHUB_USER%/%IMAGE_NAME%:%BUILD_NUMBER%
+                docker logout
+                '''
             }
         }
 
         stage('Kubernetes Deployment') {
             steps {
-                withCredentials([
-                    file(
-                        credentialsId: 'kubeconfig',
-                        variable: 'KUBECONFIG'
-                    )
-                ]) {
-                    bat '''
-                    kubectl apply -f k8s/deployment.yaml
-                    kubectl apply -f k8s/service.yaml
-                    kubectl set image deployment/newspulse-deployment newspulse=%DOCKERHUB_USER%/%IMAGE_NAME%:latest
-                    kubectl rollout status deployment/newspulse-deployment
-                    '''
-                }
+                echo 'Deploying NewsPulse to Kubernetes...'
+
+                bat '''
+                kubectl apply -f k8s/deployment.yaml
+                kubectl apply -f k8s/service.yaml
+
+                kubectl set image deployment/newspulse-deployment newspulse=%DOCKERHUB_USER%/%IMAGE_NAME%:%BUILD_NUMBER%
+
+                kubectl rollout status deployment/newspulse-deployment
+                '''
             }
         }
     }
